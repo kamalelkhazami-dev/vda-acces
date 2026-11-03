@@ -1,0 +1,112 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0A0E13"><link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes">
+<title>VDA Accès</title>
+<style>
+:root{--g:#D4AF37;--bg:#0A0E13;--c:#141D26;--b:#2A3A4A;--t:#e8e6df;--m:#8a97a3}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--t);font:15px system-ui,sans-serif;height:100dvh;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
+header{padding:12px 16px;border-bottom:1px solid #D4AF3733;display:flex;justify-content:space-between;align-items:center}
+header b{color:var(--g);letter-spacing:.12em;font-size:13px}header small{display:block;color:var(--m);font-size:10px}
+main{flex:1;overflow:auto;padding:14px}
+nav{display:flex;border-top:1px solid #D4AF3733;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;border:0;color:var(--m);padding:12px 0;font-size:12px}nav button.on{color:var(--g);font-weight:700}
+.card{background:var(--c);border:1px solid var(--b);border-radius:14px;padding:14px;margin-bottom:12px}
+input{width:100%;background:var(--bg);border:1px solid var(--b);color:var(--t);border-radius:10px;padding:11px;font-size:15px;margin:4px 0 10px}
+label{font-size:11px;color:var(--m);text-transform:uppercase;letter-spacing:.08em}
+.btn{background:linear-gradient(135deg,#AA820A,#D4AF37);color:#000;border:0;border-radius:10px;padding:12px 14px;font-weight:700;font-size:14px;width:100%}
+.btn.s{background:none;border:1px solid var(--g);color:var(--g)}.btn.r{background:none;border:1px solid #c0392b;color:#e74c3c}
+.row{display:flex;gap:8px}.row>*{flex:1}
+#vw{position:relative;border-radius:16px;overflow:hidden;border:2px solid var(--g);aspect-ratio:1;background:#000}
+video{width:100%;height:100%;object-fit:cover}
+#vw:after{content:"";position:absolute;inset:18%;border:2px dashed #D4AF37aa;border-radius:12px}
+.big{font-size:44px;font-weight:700;color:var(--g);line-height:1}
+.bar{height:6px;background:var(--b);border-radius:3px;overflow:hidden;margin-top:8px}.bar i{display:block;height:100%;background:var(--g)}
+.inv{display:flex;justify-content:space-between;align-items:center}.inv small{color:var(--m)}
+.pill{font-size:11px;padding:2px 8px;border-radius:99px;border:1px solid}
+.ok{color:#2ecc71}.ko{color:#e74c3c}
+#modal{position:fixed;inset:0;background:#000d;display:none;align-items:flex-end;z-index:9}
+#modal>div{background:var(--c);width:100%;border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));max-height:92dvh;overflow:auto;text-align:center}
+#modal img{width:220px;background:#fff;padding:10px;border-radius:12px;margin:10px 0}
+.step{display:flex;align-items:center;justify-content:center;gap:20px;margin:12px 0}
+.step button{width:46px;height:46px;border-radius:50%;border:1px solid var(--g);background:none;color:var(--g);font-size:24px}
+.step span{font-size:34px;font-weight:700;min-width:50px}
+#toast{position:fixed;top:70px;left:50%;transform:translateX(-50%);background:var(--g);color:#000;padding:10px 18px;border-radius:99px;font-weight:700;display:none;z-index:10}
+.log{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--b);font-size:13px}
+</style></head><body>
+<header><div><b>VILLA DES ARTS</b><small id="evl"></small></div><span class="pill" style="color:var(--g)" id="gl"></span></header>
+<main id="main"></main>
+<nav><button data-t="scan">📷 Scanner</button><button data-t="inv">🎟 Invitations</button><button data-t="log">📋 Journal</button></nav>
+<div id="modal"><div id="mb"></div></div><div id="toast"></div>
+<script src="lib/jsQR.js"></script><script src="lib/qrcode.js"></script>
+<script>
+const $=s=>document.querySelector(s),K='vda_v2';
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let S=JSON.parse(localStorage.getItem(K)||'null')||{ev:{name:'Le Sufisme à la Marocaine',date:'2026-11-13',time:'20:00',venue:'Villa des Arts Rabat'},inv:[],logs:[]};
+const save=()=>localStorage.setItem(K,JSON.stringify(S));
+let tab='scan',stream=null,raf=0,busy=false;
+const fd=()=>S.ev.date.split('-').reverse().join('/');
+function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',1800)}
+function stopCam(){cancelAnimationFrame(raf);stream&&stream.getTracks().forEach(t=>t.stop());stream=null}
+function show(t){tab=t;stopCam();document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t==t));
+ const tot=S.inv.reduce((a,i)=>a+i.total,0),rem=S.inv.reduce((a,i)=>a+i.remaining,0);
+ $('#evl').textContent=S.ev.name+' • '+fd()+' '+S.ev.time;$('#gl').textContent=(tot-rem)+' / '+tot+' entrés';
+ ({scan:vScan,inv:vInv,log:vLog})[t]()}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>show(b.dataset.t));
+/* SCAN */
+function vScan(){$('#main').innerHTML=`<div id="vw"><video id="v" playsinline muted></video></div>
+<p style="text-align:center;color:var(--m);margin:10px 0" id="sst">Démarrage de la caméra…</p>
+<div class="card"><div class="row" style="text-align:center"><div><div class="big">${S.inv.reduce((a,i)=>a+i.remaining,0)}</div><small style="color:var(--m)">places restantes</small></div><div><div class="big">${S.inv.length}</div><small style="color:var(--m)">invitations</small></div></div></div>`;
+ startCam()}
+async function startCam(){try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+ const v=$('#v');v.srcObject=stream;await v.play();$('#sst').textContent='Placez le QR code dans le cadre';busy=false;loop()}
+ catch(e){$('#sst').innerHTML='⚠️ Caméra indisponible : autorisez l\'accès caméra (HTTPS requis).<br><button class="btn s" style="margin-top:10px" onclick="startCam()">Réessayer</button>'}}
+function loop(){const v=$('#v');if(!v||!stream)return;
+ if(!busy&&v.videoWidth){const c=document.createElement('canvas'),w=c.width=480,h=c.height=Math.round(480*v.videoHeight/v.videoWidth),x=c.getContext('2d',{willReadFrequently:true});
+  x.drawImage(v,0,0,w,h);const r=jsQR(x.getImageData(0,0,w,h).data,w,h);if(r&&r.data){busy=true;navigator.vibrate&&navigator.vibrate(60);onCode(r.data)}}
+ raf=requestAnimationFrame(loop)}
+function onCode(txt){let o;try{o=JSON.parse(txt)}catch(e){}
+ if(!o||o.v!==1||!o.i)return modal(`<h2 class="ko">QR non reconnu</h2><p style="margin:10px 0;color:var(--m)">Ce code n'est pas une invitation Villa des Arts.</p><button class="btn" onclick="closeM()">Continuer</button>`);
+ let inv=S.inv.find(i=>i.id==o.i);if(!inv){inv={id:o.i,name:o.n,total:o.t,remaining:o.t,created:Date.now()};S.inv.push(inv);save()}
+ if(inv.remaining<=0)return modal(`<h2 class="ko">Invitation épuisée</h2><h3>${esc(inv.name)}</h3><p style="margin:10px 0;color:var(--m)">0 / ${inv.total} place disponible</p><button class="btn" onclick="closeM()">Continuer</button>`);
+ let q=1;modal(`<span class="pill ok">Invitation valide</span><h2 style="margin:8px 0">${esc(inv.name)}</h2>
+ <div class="big">${inv.remaining}<small style="font-size:18px;color:var(--m)"> / ${inv.total}</small></div><small style="color:var(--m)">places restantes</small>
+ <div class="step"><button onclick="qs(-1)">−</button><span id="q">1</span><button onclick="qs(1)">+</button></div>
+ <div class="row"><button class="btn r" onclick="closeM()">Annuler</button><button class="btn" onclick="enter('${inv.id}')">Valider l'entrée</button></div>`);
+ window.qs=d=>{q=Math.max(1,Math.min(inv.remaining,q+d));$('#q').textContent=q};
+ window.enter=id=>{const i=S.inv.find(x=>x.id==id);i.remaining-=q;S.logs.unshift({t:Date.now(),n:i.name,q,r:i.remaining});save();closeM();toast('✔ '+q+' entrée(s) — reste '+i.remaining);show('scan')}}
+function modal(h){$('#mb').innerHTML=h;$('#modal').style.display='flex'}
+function closeM(){$('#modal').style.display='none';busy=false}
+/* INVITATIONS */
+function qrUrl(i){const q=qrcode(0,'M');q.addData(JSON.stringify({v:1,i:i.id,n:i.name,t:i.total}));q.make();return q.createDataURL(8,2)}
+function vInv(){$('#main').innerHTML=`<div class="card"><label>Nom de l'invité / groupe</label><input id="nm" placeholder="Ex : Famille Alaoui">
+<label>Nombre de personnes</label><input id="nb" type="number" min="1" value="2"><button class="btn" onclick="mk()">Créer l'invitation + QR</button></div>
+<h3 style="color:var(--g);margin:6px 0 8px;font-size:13px;letter-spacing:.1em">INVITATIONS (${S.inv.length})</h3>
+${S.inv.map(i=>`<div class="card inv" onclick="det('${i.id}')"><div style="flex:1"><b>${esc(i.name)}</b><br><small>${i.remaining} / ${i.total} restantes</small><div class="bar"><i style="width:${i.remaining/i.total*100}%"></i></div></div><span style="margin-left:12px;font-size:22px;color:var(--g)">›</span></div>`).join('')||'<p style="color:var(--m);text-align:center">Aucune invitation</p>'}
+<details class="card"><summary style="color:var(--g)">⚙ Paramètres de l'événement</summary><br>
+<label>Événement</label><input id="en" value="${esc(S.ev.name)}"><label>Lieu</label><input id="ev" value="${esc(S.ev.venue)}">
+<div class="row"><div><label>Date</label><input id="ed" type="date" value="${S.ev.date}"></div><div><label>Heure</label><input id="et" type="time" value="${S.ev.time}"></div></div>
+<button class="btn s" onclick="sv()">Enregistrer</button></details>`}
+function sv(){S.ev={name:$('#en').value,venue:$('#ev').value,date:$('#ed').value,time:$('#et').value};save();toast('Enregistré');show('inv')}
+function mk(){const n=$('#nm').value.trim(),t=Math.max(1,+$('#nb').value||1);if(!n)return toast('Saisissez un nom');
+ const i={id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:n,total:t,remaining:t,created:Date.now()};S.inv.unshift(i);save();show('inv');det(i.id)}
+function det(id){const i=S.inv.find(x=>x.id==id);modal(`<h2>${esc(i.name)}</h2><small style="color:var(--m)">${esc(S.ev.name)} • ${fd()} ${S.ev.time}<br>${esc(S.ev.venue)}</small><br>
+<img src="${qrUrl(i)}"><div class="big">${i.remaining}<small style="font-size:18px;color:var(--m)"> / ${i.total}</small></div><small style="color:var(--m)">personnes restantes</small>
+<div class="row" style="margin-top:14px"><button class="btn s" onclick="dl('${id}')">⬇ Image</button><button class="btn" onclick="sh('${id}')">Partager</button></div>
+<div class="row" style="margin-top:8px"><button class="btn s" onclick="rs('${id}')">Réinitialiser</button><button class="btn r" onclick="rm('${id}')">Supprimer</button></div>
+<button class="btn s" style="margin-top:8px" onclick="closeM()">Fermer</button>`)}
+async function file(id){const i=S.inv.find(x=>x.id==id),b=await (await fetch(qrUrl(i))).blob();return new File([b],'invitation-'+i.name.replace(/\W+/g,'_')+'.gif',{type:b.type})}
+async function dl(id){const f=await file(id),a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;a.click()}
+async function sh(id){const f=await file(id),i=S.inv.find(x=>x.id==id);try{await navigator.share({files:[f],title:'Invitation '+S.ev.name,text:`Invitation pour ${i.total} personne(s) — ${S.ev.name}, ${fd()} à ${S.ev.time}, ${S.ev.venue}`})}catch(e){dl(id)}}
+function rs(id){if(confirm('Remettre le décompte au maximum ?')){const i=S.inv.find(x=>x.id==id);i.remaining=i.total;save();closeM();show('inv')}}
+function rm(id){if(confirm('Supprimer cette invitation ?')){S.inv=S.inv.filter(x=>x.id!=id);save();closeM();show('inv')}}
+/* JOURNAL */
+function vLog(){$('#main').innerHTML=`<div class="row" style="margin-bottom:12px"><button class="btn s" onclick="ex()">⬆ Exporter</button><button class="btn s" onclick="$('#im').click()">⬇ Importer</button></div><input id="im" type="file" accept=".json" hidden onchange="im(this)">
+<div class="card">${S.logs.map(l=>`<div class="log"><span><b>${esc(l.n)}</b><br><small style="color:var(--m)">${new Date(l.t).toLocaleString('fr-FR')}</small></span><span style="text-align:right"><b class="ok">+${l.q}</b><br><small style="color:var(--m)">reste ${l.r}</small></span></div>`).join('')||'<p style="color:var(--m);text-align:center">Aucun passage enregistré</p>'}</div>`}
+function ex(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'}));a.download='vda-sauvegarde.json';a.click()}
+function im(el){const r=new FileReader();r.onload=()=>{try{S=JSON.parse(r.result);save();show('log');toast('Importé')}catch(e){toast('Fichier invalide')}};r.readAsText(el.files[0])}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stopCam();else if(tab=='scan')show('scan')});
+if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+show('scan');
+</script></body></html>
